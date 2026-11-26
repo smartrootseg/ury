@@ -42,7 +42,14 @@ jobs:
         working-directory: frontend
         run: yarn test
       - name: Build all production frontends
-        run: yarn build
+        id: build
+        continue-on-error: true
+        run: |
+          # Legacy Vue Vite configs expect a bench-style sites directory.
+          # This is a throwaway build setting, with no site credentials.
+          mkdir -p ../../sites
+          printf '%s\n' '{"webserver_port":8000}' > ../../sites/common_site_config.json
+          yarn build
       - name: Install browser
         working-directory: pos
         run: yarn playwright install --with-deps chromium
@@ -53,9 +60,11 @@ jobs:
         env:
           POS_TESTS: ${{ steps.pos_tests.outcome }}
           FRONTEND_TESTS: ${{ steps.frontend_tests.outcome }}
+          BUILD: ${{ steps.build.outcome }}
         run: |
           test "$POS_TESTS" = success
           test "$FRONTEND_TESTS" = success
+          test "$BUILD" = success
       - uses: actions/upload-artifact@v4
         if: always()
         with:

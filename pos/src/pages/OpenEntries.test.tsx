@@ -58,7 +58,7 @@ describe("OpenEntries", () => {
     render(<OpenEntries />);
 
     await waitFor(() => {
-      expect(screen.getByText("Failed to load open sessions")).toBeInTheDocument();
+      expect(screen.getByText("Could not load open sessions")).toBeInTheDocument();
     });
   });
 
@@ -68,7 +68,7 @@ describe("OpenEntries", () => {
     render(<OpenEntries />);
 
     await waitFor(() => {
-      expect(screen.getByText("No open POS sessions")).toBeInTheDocument();
+      expect(screen.getByText("No open sessions right now")).toBeInTheDocument();
     });
   });
 
