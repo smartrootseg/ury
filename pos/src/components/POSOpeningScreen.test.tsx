@@ -128,3 +128,27 @@ describe("POSOpeningScreen", () => {
   });
 });
 
+
+describe("multi-cashier first opening", () => {
+  const context = (isMain: boolean) => ({
+    company: "Test Co", allowed_profiles: [{ name: "Profile 1" }],
+    selected_profile: "Profile 1", payment_modes: [{ mode_of_payment: "Cash" }],
+    user: "cashier@example.com", branch: "Main", restaurant: "Rest",
+    daily_close_pending: false,
+    multi_cashier: { enabled: true, main_cashier_open: false,
+      main_cashier_configured: true, is_main_cashier: isMain },
+    permissions: { create: true, submit: true },
+  });
+  it("allows the designated main cashier to open the first session", async () => {
+    vi.mocked(getPOSOpeningContext).mockResolvedValueOnce(context(true));
+    const view = render(<POSOpeningScreen />);
+    await waitFor(() => expect(view.getByRole("button", { name: "pos_opening.open_session" }).disabled).toBe(false));
+    expect(view.queryByText("pos_opening.main_cashier_not_open")).toBeNull();
+  });
+  it("keeps a secondary cashier blocked until the main session opens", async () => {
+    vi.mocked(getPOSOpeningContext).mockResolvedValueOnce(context(false));
+    const view = render(<POSOpeningScreen />);
+    await waitFor(() => expect(view.getByText("pos_opening.main_cashier_not_open")).toBeTruthy());
+    expect(view.getByRole("button", { name: "pos_opening.open_session" }).disabled).toBe(true);
+  });
+});

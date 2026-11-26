@@ -32,6 +32,7 @@ export interface POSOpeningMultiCashierFlags {
   enabled: boolean;
   main_cashier_open: boolean;
   main_cashier_configured: boolean;
+  is_main_cashier?: boolean;
 }
 
 export interface POSOpeningPermissions {
