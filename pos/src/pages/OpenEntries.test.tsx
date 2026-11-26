@@ -17,9 +17,6 @@ vi.mock("../store/pos-store", () => ({
 }));
 
 // Mock i18n
-vi.mock("../i18n", () => ({
-  t: (key: string) => key,
-}));
 
 // Mock UI components
 vi.mock("@ury/ui", () => ({

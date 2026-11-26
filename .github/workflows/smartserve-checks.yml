@@ -32,9 +32,13 @@ jobs:
       - name: Install all frontend dependencies
         run: yarn install --non-interactive
       - name: POS unit tests
+        id: pos_tests
+        continue-on-error: true
         working-directory: pos
         run: yarn vitest run src
       - name: Management frontend unit tests
+        id: frontend_tests
+        continue-on-error: true
         working-directory: frontend
         run: yarn test
       - name: Build all production frontends
@@ -45,6 +49,13 @@ jobs:
       - name: Check real sidebar layout in Chromium
         working-directory: pos
         run: yarn playwright test --config playwright.layout.config.ts
+      - name: Require both unit suites to pass
+        env:
+          POS_TESTS: ${{ steps.pos_tests.outcome }}
+          FRONTEND_TESTS: ${{ steps.frontend_tests.outcome }}
+        run: |
+          test "$POS_TESTS" = success
+          test "$FRONTEND_TESTS" = success
       - uses: actions/upload-artifact@v4
         if: always()
         with:

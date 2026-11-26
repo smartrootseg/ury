@@ -7,9 +7,6 @@ vi.mock("@ury/core", () => ({
   formatCurrency: (amount: number) => `Rs. ${amount.toFixed(2)}`,
 }));
 
-vi.mock("../i18n", () => ({
-  t: (key: string) => key,
-}));
 
 vi.mock("@ury/ui", () => ({
   Input: ({ ...props }: any) => <input {...props} />,
@@ -150,11 +147,11 @@ describe("ClosingPaymentTable", () => {
     expect(screen.queryByText("Rs. 500.00")).toBeNull();
     expect(screen.queryByText("Rs. 300.00")).toBeNull();
     // Expected and Difference are both masked for every row.
-    expect(screen.getAllByText("—")).toHaveLength(4);
+    expect(screen.getAllByText("â€”")).toHaveLength(4);
     screen.getAllByRole("row").slice(1).forEach((row) => {
       const cells = row.querySelectorAll("td");
-      expect(cells[2].textContent).toBe("—"); // Expected
-      expect(cells[4].textContent).toBe("—"); // Difference
+      expect(cells[2].textContent).toBe("â€”"); // Expected
+      expect(cells[4].textContent).toBe("â€”"); // Difference
     });
   });
 });
