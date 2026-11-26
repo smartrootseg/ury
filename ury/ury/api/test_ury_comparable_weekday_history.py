@@ -9,6 +9,7 @@ from ury.ury.api.ury_dashboard import get_comparable_weekday_history
 class TestComparableWeekdayHistory(FrappeTestCase):
 	def _allow_history_access(self):
 		patches = [
+			patch("ury.ury.api.ury_sales_plan_rate.resolve_item_rates", return_value={}),
 			patch("ury.ury.api.ury_dashboard.frappe.has_permission", return_value=True),
 			patch("ury.ury.api.ury_dashboard.frappe.db.get_value", return_value="Company A"),
 			patch("ury.ury.api.ury_dashboard._has_dashboard_cross_branch_access", return_value=False),
