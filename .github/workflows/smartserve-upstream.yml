@@ -1,0 +1,103 @@
+name: Smartserve upstream updates
+on:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: smartserve-upstream-updates
+  cancel-in-progress: false
+jobs:
+  prepare:
+    name: Merge upstream into candidate branch
+    if: github.repository == 'smartrootseg/ury'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      changed: ${{ steps.merge.outputs.changed }}
+      sha: ${{ steps.merge.outputs.sha }}
+      upstream: ${{ steps.merge.outputs.upstream }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: smartserve-version-16
+          fetch-depth: 0
+      - name: Merge without overwriting customizations
+        id: merge
+        run: |
+          set -euo pipefail
+          git config user.name 'Smartserve update bot'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git remote add ury-upstream https://github.com/ury-erp/ury.git
+          git fetch ury-upstream version-16
+          upstream=$(git rev-parse FETCH_HEAD)
+          echo "upstream=$upstream" >> "$GITHUB_OUTPUT"
+          if git merge-base --is-ancestor "$upstream" origin/smartserve-version-16; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            echo '### No new upstream version-16 changes' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          branch=updates/ury-version-16
+          if git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+            git checkout -b candidate "origin/$branch"
+            git merge --no-edit origin/smartserve-version-16
+          else
+            git checkout -b candidate origin/smartserve-version-16
+          fi
+          if ! git merge --no-edit "$upstream"; then
+            echo '### Merge conflict — live branch unchanged' >> "$GITHUB_STEP_SUMMARY"
+            git diff --name-only --diff-filter=U >> "$GITHUB_STEP_SUMMARY"
+            echo 'Resolve the conflicting customizations manually; no candidate was published.' >> "$GITHUB_STEP_SUMMARY"
+            git merge --abort
+            exit 1
+          fi
+          git push origin "HEAD:refs/heads/$branch"
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "### Candidate $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Upstream version-16: $upstream. Production branch unchanged." >> "$GITHUB_STEP_SUMMARY"
+  validate:
+    needs: prepare
+    if: needs.prepare.outputs.changed == 'true'
+    uses: ./.github/workflows/smartserve-checks.yml
+    with:
+      ref: ${{ needs.prepare.outputs.sha }}
+  review:
+    name: Open update for human review
+    needs: [prepare, validate]
+    if: always() && needs.prepare.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          VALIDATION: ${{ needs.validate.result }}
+          CANDIDATE: ${{ needs.prepare.outputs.sha }}
+          UPSTREAM: ${{ needs.prepare.outputs.upstream }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const passed = process.env.VALIDATION === 'success';
+            const run = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const body = [
+              `Merges URY version-16 through ${process.env.UPSTREAM} while retaining the Smartserve customization history.`,
+              `Candidate: ${process.env.CANDIDATE}`,
+              `Validation: **${process.env.VALIDATION}** — [build, unit, browser layout and Frappe 16 backend results](${run}).`,
+              'No automatic merge or deployment is configured.',
+              'Before deployment: review upstream changes and any test exclusions; require the Smartserve validation check to pass; merge this PR; take a site backup and use Frappe Cloud deployment controls. Test stock shortages, product-bundle consumption, add-ons, three-branch menus, room pricing and food/drinks/sweets KDS on a disposable site copy before promoting changes that affect those features.',
+              'If this PR has changed since the linked validation, rerun checks. Never deploy an untested or failed candidate.'
+            ].join('\n\n');
+            const { data: pulls } = await github.rest.pulls.list({owner, repo, state:'open', base:'smartserve-version-16', head:`${owner}:updates/ury-version-16`});
+            const title = 'Update Smartserve with upstream URY version-16';
+            if (pulls.length) {
+              await github.rest.pulls.update({owner,repo,pull_number:pulls[0].number,title,body});
+              if (!passed && !pulls[0].draft) {
+                await github.graphql('mutation($id:ID!){convertPullRequestToDraft(input:{pullRequestId:$id}){pullRequest{id}}}',{id:pulls[0].node_id});
+              }
+              // Existing drafts stay drafts until a maintainer reviews the results.
+            } else {
+              await github.rest.pulls.create({owner,repo,base:'smartserve-version-16',head:'updates/ury-version-16',title,body,draft:!passed});
+            }

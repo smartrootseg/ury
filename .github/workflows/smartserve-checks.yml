@@ -1,0 +1,73 @@
+name: Smartserve checks
+on:
+  pull_request:
+    branches: [smartserve-version-16]
+  push:
+    branches: [smartserve-version-16]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: smartserve-checks-${{ github.event.pull_request.number || inputs.ref || github.ref }}
+  cancel-in-progress: true
+jobs:
+  frontend:
+    name: Frontend and course layout
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --global yarn@1.22.22
+      - name: Install all frontend dependencies
+        run: yarn install --non-interactive
+      - name: POS unit tests
+        working-directory: pos
+        run: yarn vitest run src
+      - name: Management frontend unit tests
+        working-directory: frontend
+        run: yarn test
+      - name: Build all production frontends
+        run: yarn build
+      - name: Install browser
+        working-directory: pos
+        run: yarn playwright install --with-deps chromium
+      - name: Check real sidebar layout in Chromium
+        working-directory: pos
+        run: yarn playwright test --config playwright.layout.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smartserve-layout-report
+          path: |
+            pos/playwright-report
+            pos/test-results
+          if-no-files-found: ignore
+          retention-days: 14
+  backend:
+    name: Frappe 16 backend
+    uses: ./.github/workflows/smartserve-backend.yml
+    with:
+      ref: ${{ inputs.ref || github.ref }}
+  gate:
+    name: Smartserve validation
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [frontend, backend]
+    steps:
+      - env:
+          FRONTEND: ${{ needs.frontend.result }}
+          BACKEND: ${{ needs.backend.result }}
+        run: |
+          test "$FRONTEND" = success
+          test "$BACKEND" = success
