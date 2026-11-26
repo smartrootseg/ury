@@ -23,6 +23,7 @@ class TestURYWorkflowGeneric(FrappeTestCase):
                     "doctype": "Company",
                     "company_name": company_name,
                     "default_currency": "INR",
+                    "country": "India",
                     "abbr": abbr,
                 }
             ).insert(ignore_permissions=True)

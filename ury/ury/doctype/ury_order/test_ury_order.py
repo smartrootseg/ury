@@ -890,6 +890,10 @@ def _make_pos_profile(
 ):
     profile = MagicMock()
     profile.name = name
+    profile.company = "Company A"
+    profile.customer = None
+    profile.custom_order_type_customers = []
+    profile.get.side_effect = lambda field, default=None: profile.__dict__.get(field, default)
     profile.transfer_role_permissions = _role_rows(*transfer_role_permissions)
     profile.role_allowed_for_billing = _role_rows(*role_allowed_for_billing)
     profile.role_restricted_for_table_order = _role_rows(*role_restricted_for_table_order)

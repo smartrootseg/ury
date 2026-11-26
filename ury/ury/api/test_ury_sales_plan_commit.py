@@ -14,6 +14,13 @@ from ury.ury.api import ury_sales_plan_commit as mod
 
 
 class TestResolvePlanItemRows(unittest.TestCase):
+	def setUp(self):
+		# Isolate the resolver's business queries from getdate()'s lazy
+		# System Settings metadata reads on a freshly initialized site.
+		date_patcher = patch.object(mod, "getdate", return_value="2026-01-01")
+		date_patcher.start()
+		self.addCleanup(date_patcher.stop)
+
 	def test_no_matching_plans_returns_empty(self):
 		with patch.object(mod.frappe, "get_all", return_value=[]) as get_all:
 			rows = mod.resolve_plan_item_rows("ITEM-1", "BR-1", "COMP-1")
