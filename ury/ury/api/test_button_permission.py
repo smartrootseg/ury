@@ -25,7 +25,7 @@ class TestCancelCheckPermission(FrappeTestCase):
         result = cancel_check()
         self.assertTrue(result)
         mock_has_permission.assert_called_once_with(
-            "POS Invoice", "cancel", raise_exception=False
+            "POS Invoice", "cancel", print_logs=False
         )
 
     @patch("ury.ury.api.button_permission.frappe.permissions.has_permission")
@@ -35,17 +35,17 @@ class TestCancelCheckPermission(FrappeTestCase):
         result = cancel_check()
         self.assertFalse(result)
         mock_has_permission.assert_called_once_with(
-            "POS Invoice", "cancel", raise_exception=False
+            "POS Invoice", "cancel", print_logs=False
         )
 
     @patch("ury.ury.api.button_permission.frappe.permissions.has_permission")
-    def test_uses_raise_exception_false_flag(self, mock_has_permission):
-        """Permission check uses raise_exception=False to avoid exceptions."""
+    def test_uses_silent_permission_check(self, mock_has_permission):
+        """Permission check suppresses permission-log messages without skipping evaluation."""
         mock_has_permission.return_value = False
         cancel_check()
-        # Verify raise_exception=False is explicitly passed
+        # Verify print_logs=False is explicitly passed
         call_args = mock_has_permission.call_args
-        self.assertEqual(call_args.kwargs.get("raise_exception"), False)
+        self.assertEqual(call_args.kwargs.get("print_logs"), False)
 
     @patch("ury.ury.api.button_permission.frappe.permissions.has_permission")
     def test_permission_check_targets_pos_invoice_doctype(self, mock_has_permission):
@@ -103,7 +103,7 @@ class TestCancelCheckPermission(FrappeTestCase):
     def test_catches_unexpected_exception_from_permission_check(self, mock_has_permission):
         """Function handles exception from permission check gracefully.
         
-        Even though raise_exception=False is passed, the function should be
+        Even though print_logs=False is passed, the function should be
         defensive against unexpected exceptions in the permission layer.
         """
         mock_has_permission.side_effect = Exception("Unexpected error in permission check")
@@ -155,9 +155,9 @@ class TestCancelCheckRealPermissionBoundary(FrappeTestCase):
     actual POS Invoice 'cancel' permission-role lookup has never run for real
     against a real session/role-permission table -- same class of gap as the
     branch-operational-state and service-line findings in round 3. Unlike
-    those, cancel_check() itself never raises: has_permission(...,
-    raise_exception=False) means the function returns a plain bool either
-    way. So the 'negative-permission' assertion here is that a roleless user
+    those, the permission API returns a plain boolean for denied access;
+    print_logs=False only suppresses permission-log messages. The
+    'negative-permission' assertion here is that a roleless user
     really gets back False (not that an exception is raised), confirmed
     against real role-permission evaluation rather than a mock.
     """

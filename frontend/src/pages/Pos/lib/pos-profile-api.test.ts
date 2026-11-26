@@ -79,15 +79,16 @@ describe('getPosProfileLimitedFields', () => {
 });
 
 describe('getPosProfileFull', () => {
-  beforeEach(() => getDocMock.mockReset());
+  beforeEach(() => { callGetMock.mockReset(); getDocMock.mockReset(); });
 
-  it('fetches the POS Profile doctype by name', async () => {
+  it('fetches the full profile through the permission-scoped server method', async () => {
     const full = buildFull();
-    getDocMock.mockResolvedValueOnce(full);
+    callGetMock.mockResolvedValueOnce({ message: full });
 
     const result = await getPosProfileFull('Kozhikode POS');
 
-    expect(getDocMock).toHaveBeenCalledWith('POS Profile', 'Kozhikode POS');
+    expect(callGetMock).toHaveBeenCalledWith('ury.ury_pos.api.getPosProfileFull', { pos_profile: 'Kozhikode POS' });
+    expect(getDocMock).not.toHaveBeenCalled();
     expect(result).toEqual(full);
   });
 });
@@ -130,12 +131,13 @@ describe('getCombinedPosProfile', () => {
     const limited = buildLimited({ pos_profile: 'Kozhikode POS' });
     const full = buildFull({ name: 'Kozhikode POS' });
     callGetMock.mockResolvedValueOnce({ message: limited });
-    getDocMock.mockResolvedValueOnce(full);
+    callGetMock.mockResolvedValueOnce({ message: full });
 
     await getCombinedPosProfile();
 
     expect(callGetMock).toHaveBeenCalledWith('ury.ury_pos.api.getPosProfile');
-    expect(getDocMock).toHaveBeenCalledWith('POS Profile', 'Kozhikode POS');
+    expect(callGetMock).toHaveBeenCalledWith('ury.ury_pos.api.getPosProfileFull', { pos_profile: 'Kozhikode POS' });
+    expect(getDocMock).not.toHaveBeenCalled();
   });
 
   it('merges the full profile with the limited-only fields, with limited fields taking precedence on overlap', async () => {
@@ -147,7 +149,7 @@ describe('getCombinedPosProfile', () => {
     });
     const full = buildFull({ owner: 'full-owner@example.com', paid_limit: 1 });
     callGetMock.mockResolvedValueOnce({ message: limited });
-    getDocMock.mockResolvedValueOnce(full);
+    callGetMock.mockResolvedValueOnce({ message: full });
 
     const result = await getCombinedPosProfile();
 
@@ -171,7 +173,7 @@ describe('getCombinedPosProfile', () => {
 
   it('propagates a rejection from the full-profile fetch', async () => {
     callGetMock.mockResolvedValueOnce({ message: buildLimited() });
-    getDocMock.mockRejectedValueOnce(new Error('POS Profile not found'));
+    callGetMock.mockRejectedValueOnce(new Error('POS Profile not found'));
 
     await expect(getCombinedPosProfile()).rejects.toThrow('POS Profile not found');
   });
