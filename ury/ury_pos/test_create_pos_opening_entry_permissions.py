@@ -92,3 +92,21 @@ class TestCreatePosOpeningEntryPermissions(FrappeTestCase):
 
         self.assertEqual(result["name"], "POS-OPN-0001")
         opening_doc.submit.assert_called_once()
+
+class TestMainCashierStatus(FrappeTestCase):
+    def test_identifies_main_cashier_without_requiring_existing_session(self):
+        profile = MagicMock()
+        profile.custom_enable_multiple_cashier = 1
+        row = MagicMock()
+        row.custom_main_cashier = 1
+        row.user = "main@ury.test"
+        profile.applicable_for_users = [row]
+        for session_user, expected in [("main@ury.test", True), ("second@ury.test", False)]:
+            with self.subTest(user=session_user), \
+                patch(f"{MODULE}.frappe.get_doc", return_value=profile), \
+                patch(f"{MODULE}.frappe.db.exists", return_value=False), \
+                patch(f"{MODULE}.frappe.session") as session:
+                session.user = session_user
+                result = pos_api._get_main_cashier_status("Test Profile")
+            self.assertEqual(result["is_main_cashier"], expected)
+            self.assertFalse(result["main_cashier_open"])

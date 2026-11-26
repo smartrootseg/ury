@@ -27,7 +27,12 @@ const auth = reactive({
 		return await res.json();
 	},
 	async logout() {
-		await fetch("/api/method/logout", { method: "POST" });
+		const response = await fetch("/api/method/logout", {
+			method: "POST",
+			credentials: "same-origin",
+			headers: { "X-Frappe-CSRF-Token": window.csrf_token || "" },
+		});
+		if (!response.ok) throw new Error("Logout failed");
 	},
 });
 app.provide("$auth", auth);

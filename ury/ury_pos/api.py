@@ -1315,6 +1315,7 @@ def _get_main_cashier_status(pos_profile_name: str) -> dict:
             "enabled": enabled,
             "main_cashier_configured": main_cashier_configured,
             "main_cashier_open": main_cashier_open,
+            "is_main_cashier": bool(main_cashier and main_cashier == frappe.session.user),
         }
     except Exception:
         return {"enabled": False, "main_cashier_configured": False, "main_cashier_open": False}

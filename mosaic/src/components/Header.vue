@@ -111,9 +111,15 @@ export default {
     async logout() {
       this.showUserMenu = false;
       try {
-        await fetch('/api/method/logout', { method: 'POST' });
+        const response = await fetch('/api/method/logout', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'X-Frappe-CSRF-Token': window.csrf_token || '' },
+        });
+        if (!response.ok) throw new Error('Logout failed');
       } catch (e) {
         console.error(e);
+        return;
       }
       window.location.href = '/login?redirect-to=%2Fmosaic';
     },

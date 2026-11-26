@@ -119,7 +119,7 @@ const POSOpeningScreen = ({ onSuccess, onError }: POSOpeningScreenProps) => {
       if (!context.multi_cashier.main_cashier_configured) {
         return 'main_cashier_not_configured';
       }
-      if (!context.multi_cashier.main_cashier_open) {
+      if (!context.multi_cashier.main_cashier_open && !context.multi_cashier.is_main_cashier) {
         return 'main_cashier_not_open';
       }
     }
