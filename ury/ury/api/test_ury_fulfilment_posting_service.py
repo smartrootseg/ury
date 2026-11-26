@@ -338,7 +338,7 @@ class TestCreatePostingIntent(FrappeTestCase):
 
 		def get_value(doctype, *args, **kwargs):
 			if doctype == "Item":
-				return 1  # Stock item, not a bundle parent.
+				return 0  # A bundle parent is a non-stock item.
 			if doctype == "URY Item Production Configuration":
 				return None
 			if doctype == "URY KOT":
@@ -348,6 +348,8 @@ class TestCreatePostingIntent(FrappeTestCase):
 			raise AssertionError(doctype)
 
 		rows = _reservation_rows(policy="BUNDLE")
+		for row in rows:
+			row.policy = "BUNDLE"  # Preserve the bundle policy on legacy rows too.
 		with patch(f"{MODULE}.frappe.db.exists", side_effect=lambda doctype, *args, **kwargs: doctype == "DocType"), patch(
 			f"{MODULE}.frappe.get_doc", side_effect=get_doc
 		), patch(f"{MODULE}.frappe.db.get_value", side_effect=get_value), patch(

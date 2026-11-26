@@ -208,6 +208,10 @@ def _sum_live(doctype, filters, fieldname):
 def _sum_live_if_exists(doctype, filters, fieldname):
     if not frappe.db.exists("DocType", doctype):
         return 0
+    if doctype == "URY Wastage" and fieldname == "wasted_qty":
+        from ury.ury.api.ury_wastage_quantities import sum_authorized_wastage
+
+        return sum_authorized_wastage(filters)
     return _sum_live(doctype, filters, fieldname)
 
 
