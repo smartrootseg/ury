@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { cleanup, render, screen, waitFor, fireEvent } from "@testing-library/react";
 import UserPage from "./UserPage";
 import { dashboardService } from "../../services/dashboard";
+import { call } from "@ury/core";
 
 vi.mock("../../context/BranchContext", () => ({
   useBranchContext: () => ({
@@ -58,6 +59,14 @@ describe("UserPage", () => {
   beforeEach(() => {
     cleanup();
     vi.mocked(dashboardService.getModuleRecords).mockReset();
+    vi.mocked(call).mockReset();
+    vi.mocked(call).mockImplementation(async (_method, args) => ({
+      message: args?.doctype === 'Role'
+        ? ['URY Admin', 'URY Manager', 'URY Captain', 'URY Cashier'].map(name => ({name}))
+        : args?.doctype === 'Has Role'
+          ? users.flatMap(user => user.roles.map(({role}) => ({parent: user.name, role})))
+          : [],
+    }));
   });
 
   it("shows page with buttons", async () => {
@@ -70,14 +79,14 @@ describe("UserPage", () => {
     });
   });
 
-  it("displays user email and multiple role badges", async () => {
+  it("displays user email and the primary URY role badge", async () => {
     vi.mocked(dashboardService.getModuleRecords).mockResolvedValue(users);
 
     render(<UserPage />);
     await waitFor(() => {
       expect(screen.getByText("user@ury.test")).toBeInTheDocument();
-      expect(screen.getByText("Admin")).toBeInTheDocument();
-      expect(screen.getByText("Manager")).toBeInTheDocument();
+      expect(screen.getByText("URY Admin")).toBeInTheDocument();
+      expect(screen.queryByText("URY Manager")).not.toBeInTheDocument();
     });
   });
 

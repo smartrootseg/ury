@@ -358,6 +358,8 @@ class TestProductionUnitDepartmentMigration(TestCase):
         kot.production = "Biryani"
         kot.restaurant_table = None
         kot.table_takeaway = 0
+        kot.invoice = "INV-0001"
+        kot.owner = "Administrator"
 
         production_unit_printer_rows = [
             frappe._dict(
@@ -384,8 +386,8 @@ class TestProductionUnitDepartmentMigration(TestCase):
             # plain dict here would raise AttributeError.
             side_effect=get_all_side_effect,
         ) as mock_get_all, patch(
-            "ury.ury.doctype.ury_kot.ury_kot.print_by_server"
-        ) as mock_print_by_server:
+            "ury.ury.doctype.ury_kot.ury_kot.frappe.get_doc"
+        ) as mock_get_printer:
             kot.multi_print_kot()
 
         mock_get_all.assert_any_call(
@@ -394,7 +396,12 @@ class TestProductionUnitDepartmentMigration(TestCase):
             filters={"parent": "Biryani", "custom_kot_print": 1, "parenttype": "URY Production Unit"},
             order_by="idx",
         )
-        mock_print_by_server.assert_called_once_with("URY KOT", "KOT-0001", "Kitchen Printer", "KOT")
+        mock_get_printer.assert_called_once_with("Network Printer Settings", "Kitchen Printer")
+        mock_get_printer.return_value.print_doc.assert_called_once_with(
+            doctype="URY KOT", name="KOT-0001", print_format="KOT", job_type="KOT",
+            extra_metadata={"invoice": "INV-0001", "restaurant_table": None,
+                            "production": "Biryani", "job_owner": "Administrator"},
+        )
 
     @patch("ury.ury.services.production_unit_department_migration.frappe.get_doc")
     @patch("ury.ury.services.production_unit_department_migration.frappe.get_all")

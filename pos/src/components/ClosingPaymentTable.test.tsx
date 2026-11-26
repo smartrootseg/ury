@@ -7,9 +7,6 @@ vi.mock("@ury/core", () => ({
   formatCurrency: (amount: number) => `Rs. ${amount.toFixed(2)}`,
 }));
 
-vi.mock("../i18n", () => ({
-  t: (key: string) => key,
-}));
 
 vi.mock("@ury/ui", () => ({
   Input: ({ ...props }: any) => <input {...props} />,

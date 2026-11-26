@@ -180,6 +180,10 @@ class TestCreatePostingIntent(FrappeTestCase):
 			raise AssertionError(arg)
 
 		def get_value(doctype, *args, **kwargs):
+			if doctype == "Item":
+				return 1  # Stock item, not a bundle parent.
+			if doctype == "URY Item Production Configuration":
+				return None
 			if doctype == "URY KOT":
 				return "POS-INV-1"
 			if doctype == "URY Fulfilment Posting Intent":
@@ -187,7 +191,7 @@ class TestCreatePostingIntent(FrappeTestCase):
 			raise AssertionError(doctype)
 
 		with patch(f"{MODULE}.is_pos_stock_authority_flag_enabled", return_value=False), patch(
-			f"{MODULE}.frappe.db.exists", return_value=True
+			f"{MODULE}.frappe.db.exists", side_effect=lambda doctype, *args, **kwargs: doctype == "DocType"
 		), patch(f"{MODULE}.frappe.get_doc", side_effect=get_doc), patch(
 			f"{MODULE}.frappe.db.get_value", side_effect=get_value
 		), patch(f"{MODULE}.frappe.get_all", side_effect=_get_all_for_create()), patch(
@@ -213,13 +217,17 @@ class TestCreatePostingIntent(FrappeTestCase):
 			raise AssertionError(arg)
 
 		def get_value(doctype, *args, **kwargs):
+			if doctype == "Item":
+				return 1  # Stock item, not a bundle parent.
+			if doctype == "URY Item Production Configuration":
+				return None
 			if doctype == "URY KOT":
 				return "POS-INV-1"
 			if doctype == "URY Fulfilment Posting Intent":
 				return None
 			raise AssertionError(doctype)
 
-		with patch(f"{MODULE}.frappe.db.exists", return_value=True), patch(
+		with patch(f"{MODULE}.frappe.db.exists", side_effect=lambda doctype, *args, **kwargs: doctype == "DocType"), patch(
 			f"{MODULE}.frappe.get_doc", side_effect=get_doc
 		), patch(f"{MODULE}.frappe.db.get_value", side_effect=get_value), patch(
 			f"{MODULE}.frappe.get_all", side_effect=_get_all_for_create()
@@ -266,6 +274,10 @@ class TestCreatePostingIntent(FrappeTestCase):
 			raise AssertionError(arg)
 
 		def get_value(doctype, *args, **kwargs):
+			if doctype == "Item":
+				return 1  # Stock item, not a bundle parent.
+			if doctype == "URY Item Production Configuration":
+				return None
 			if doctype == "URY KOT":
 				return "POS-INV-1"
 			if doctype == "URY Fulfilment Posting Intent":
@@ -273,7 +285,7 @@ class TestCreatePostingIntent(FrappeTestCase):
 			raise AssertionError(doctype)
 
 		rows = [_reservation_rows(policy="PRE_PRODUCED")[0]]
-		with patch(f"{MODULE}.frappe.db.exists", return_value=True), patch(
+		with patch(f"{MODULE}.frappe.db.exists", side_effect=lambda doctype, *args, **kwargs: doctype == "DocType"), patch(
 			f"{MODULE}.frappe.get_doc", side_effect=get_doc
 		), patch(f"{MODULE}.frappe.db.get_value", side_effect=get_value), patch(
 			f"{MODULE}.frappe.get_all", side_effect=_get_all_for_create(reservation_rows=rows)
@@ -294,6 +306,10 @@ class TestCreatePostingIntent(FrappeTestCase):
 			raise AssertionError(arg)
 
 		def get_value(doctype, *args, **kwargs):
+			if doctype == "Item":
+				return 1  # Stock item, not a bundle parent.
+			if doctype == "URY Item Production Configuration":
+				return None
 			if doctype == "URY KOT":
 				return "POS-INV-1"
 			if doctype == "URY Fulfilment Posting Intent":
@@ -301,7 +317,7 @@ class TestCreatePostingIntent(FrappeTestCase):
 			raise AssertionError(doctype)
 
 		rows = [_reservation_rows(policy="DIRECT_RETAIL")[0]]
-		with patch(f"{MODULE}.frappe.db.exists", return_value=True), patch(
+		with patch(f"{MODULE}.frappe.db.exists", side_effect=lambda doctype, *args, **kwargs: doctype == "DocType"), patch(
 			f"{MODULE}.frappe.get_doc", side_effect=get_doc
 		), patch(f"{MODULE}.frappe.db.get_value", side_effect=get_value), patch(
 			f"{MODULE}.frappe.get_all", side_effect=_get_all_for_create(reservation_rows=rows)
@@ -321,6 +337,10 @@ class TestCreatePostingIntent(FrappeTestCase):
 			raise AssertionError(arg)
 
 		def get_value(doctype, *args, **kwargs):
+			if doctype == "Item":
+				return 0  # A bundle parent is a non-stock item.
+			if doctype == "URY Item Production Configuration":
+				return None
 			if doctype == "URY KOT":
 				return "POS-INV-1"
 			if doctype == "URY Fulfilment Posting Intent":
@@ -328,7 +348,9 @@ class TestCreatePostingIntent(FrappeTestCase):
 			raise AssertionError(doctype)
 
 		rows = _reservation_rows(policy="BUNDLE")
-		with patch(f"{MODULE}.frappe.db.exists", return_value=True), patch(
+		for row in rows:
+			row.policy = "BUNDLE"  # Preserve the bundle policy on legacy rows too.
+		with patch(f"{MODULE}.frappe.db.exists", side_effect=lambda doctype, *args, **kwargs: doctype == "DocType"), patch(
 			f"{MODULE}.frappe.get_doc", side_effect=get_doc
 		), patch(f"{MODULE}.frappe.db.get_value", side_effect=get_value), patch(
 			f"{MODULE}.frappe.get_all", side_effect=_get_all_for_create(reservation_rows=rows)
@@ -354,6 +376,10 @@ class TestCreatePostingIntent(FrappeTestCase):
 			raise AssertionError(arg)
 
 		def get_value(doctype, *args, **kwargs):
+			if doctype == "Item":
+				return 1  # Stock item, not a bundle parent.
+			if doctype == "URY Item Production Configuration":
+				return None
 			if doctype == "URY KOT":
 				return "POS-INV-1"
 			if doctype == "URY Fulfilment Posting Intent":
@@ -361,7 +387,7 @@ class TestCreatePostingIntent(FrappeTestCase):
 			raise AssertionError(doctype)
 
 		existing_sequences = [frappe._dict({"fulfilment_sequence": 1})]
-		with patch(f"{MODULE}.frappe.db.exists", return_value=True), patch(
+		with patch(f"{MODULE}.frappe.db.exists", side_effect=lambda doctype, *args, **kwargs: doctype == "DocType"), patch(
 			f"{MODULE}.frappe.get_doc", side_effect=get_doc
 		), patch(f"{MODULE}.frappe.db.get_value", side_effect=get_value), patch(
 			f"{MODULE}.frappe.get_all", side_effect=_get_all_for_create(existing_sequences=existing_sequences)
@@ -386,6 +412,10 @@ class TestCreatePostingIntent(FrappeTestCase):
 			raise AssertionError(arg)
 
 		def get_value(doctype, *args, **kwargs):
+			if doctype == "Item":
+				return 1  # Stock item, not a bundle parent.
+			if doctype == "URY Item Production Configuration":
+				return None
 			if doctype == "URY KOT":
 				return "POS-INV-1"
 			if doctype == "URY Fulfilment Posting Intent":
@@ -393,7 +423,7 @@ class TestCreatePostingIntent(FrappeTestCase):
 			raise AssertionError(doctype)
 
 		same_group_sequences = [frappe._dict({"fulfilment_sequence": 1})]
-		with patch(f"{MODULE}.frappe.db.exists", return_value=True), patch(
+		with patch(f"{MODULE}.frappe.db.exists", side_effect=lambda doctype, *args, **kwargs: doctype == "DocType"), patch(
 			f"{MODULE}.frappe.get_doc", side_effect=get_doc
 		), patch(f"{MODULE}.frappe.db.get_value", side_effect=get_value), patch(
 			f"{MODULE}.frappe.get_all", side_effect=_get_all_for_create(same_group_sequences=same_group_sequences)
@@ -415,13 +445,17 @@ class TestCreatePostingIntent(FrappeTestCase):
 			raise AssertionError(arg)
 
 		def get_value(doctype, *args, **kwargs):
+			if doctype == "Item":
+				return 1  # Stock item, not a bundle parent.
+			if doctype == "URY Item Production Configuration":
+				return None
 			if doctype == "URY KOT":
 				return "POS-INV-1"
 			if doctype == "URY Fulfilment Posting Intent":
 				return "INTENT-1"
 			raise AssertionError(doctype)
 
-		with patch(f"{MODULE}.frappe.db.exists", return_value=True), patch(
+		with patch(f"{MODULE}.frappe.db.exists", side_effect=lambda doctype, *args, **kwargs: doctype == "DocType"), patch(
 			f"{MODULE}.frappe.get_doc", side_effect=get_doc
 		), patch(f"{MODULE}.frappe.db.get_value", side_effect=get_value), patch(
 			f"{MODULE}.frappe.get_all", side_effect=_get_all_for_create(existing_sequences=[frappe._dict({"fulfilment_sequence": 1})])
@@ -872,6 +906,10 @@ class TestReservationLineScoping(FrappeTestCase):
 			raise AssertionError(arg)
 
 		def get_value(doctype, *args, **kwargs):
+			if doctype == "Item":
+				return 1  # Stock item, not a bundle parent.
+			if doctype == "URY Item Production Configuration":
+				return None
 			if doctype == "URY KOT":
 				return "POS-INV-1"
 			if doctype == "URY Fulfilment Posting Intent":
@@ -890,7 +928,7 @@ class TestReservationLineScoping(FrappeTestCase):
 
 		execution = _execution_doc()
 		execution.kot_item = kot_item_name
-		with patch(f"{MODULE}.frappe.db.exists", return_value=True), patch(
+		with patch(f"{MODULE}.frappe.db.exists", side_effect=lambda doctype, *args, **kwargs: doctype == "DocType"), patch(
 			f"{MODULE}.frappe.get_doc", side_effect=get_doc
 		), patch(f"{MODULE}.frappe.db.get_value", side_effect=get_value), patch(
 			f"{MODULE}.frappe.get_all", side_effect=get_all
@@ -1049,6 +1087,10 @@ class TestSharedReservationGroupComponentScaling(FrappeTestCase):
 			raise AssertionError(arg)
 
 		def get_value(doctype, *args, **kwargs):
+			if doctype == "Item":
+				return 1  # Stock item, not a bundle parent.
+			if doctype == "URY Item Production Configuration":
+				return None
 			if doctype == "URY KOT":
 				return "POS-INV-1"
 			if doctype == "URY Fulfilment Posting Intent":
@@ -1064,7 +1106,7 @@ class TestSharedReservationGroupComponentScaling(FrappeTestCase):
 
 		execution = _execution_doc()
 		execution.kot_item = kot_item_name
-		with patch(f"{MODULE}.frappe.db.exists", return_value=True), patch(
+		with patch(f"{MODULE}.frappe.db.exists", side_effect=lambda doctype, *args, **kwargs: doctype == "DocType"), patch(
 			f"{MODULE}.frappe.get_doc", side_effect=get_doc
 		), patch(f"{MODULE}.frappe.db.get_value", side_effect=get_value), patch(
 			f"{MODULE}.frappe.get_all", side_effect=get_all

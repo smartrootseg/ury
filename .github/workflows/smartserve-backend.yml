@@ -412,9 +412,17 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: |
           cd frappe_env
+          failed_modules=()
           while IFS= read -r module; do
             [ -z "$module" ] && continue
-            bench --site test_site run-tests --app ury --module "$module"
+            if ! timeout 180s bench --site test_site run-tests --app ury --module "$module"; then
+              failed_modules+=("$module")
+            fi
           done <<'MODULES'
           ${{ matrix.modules }}
           MODULES
+          if ((${#failed_modules[@]})); then
+            printf '### Backend modules that failed or timed out\n' >> "$GITHUB_STEP_SUMMARY"
+            printf -- '- %s\n' "${failed_modules[@]}" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

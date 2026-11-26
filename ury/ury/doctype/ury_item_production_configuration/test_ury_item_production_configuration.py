@@ -47,8 +47,12 @@ class TestURYItemProductionConfiguration(FrappeTestCase):
             # narrowly on the exact (fieldname="name", cache=True) shape so
             # unrelated get_value calls that merely ask for a "name" field
             # (e.g. workflow lookups) are unaffected.
-            if fieldname == "name" and cache and isinstance(name, str):
-                return name
+            if cache and isinstance(name, str):
+                if fieldname == "name":
+                    return name
+                if isinstance(fieldname, (tuple, list)) and fieldname[0] == "name":
+                    # Frappe 16 fetches link identity and fetch_from fields together.
+                    return frappe._dict({field: name if field == "name" else None for field in fieldname})
 
             if isinstance(name, Hashable):
                 key = (doctype, name)
@@ -360,8 +364,12 @@ class TestURYItemProductionConfiguration(FrappeTestCase):
             # frappe.db.exists. Matched narrowly so unrelated get_value calls
             # that merely ask for a "name" field (e.g. workflow lookups) are
             # unaffected.
-            if fieldname == "name" and cache and isinstance(name, str):
-                return name
+            if cache and isinstance(name, str):
+                if fieldname == "name":
+                    return name
+                if isinstance(fieldname, (tuple, list)) and fieldname[0] == "name":
+                    # Frappe 16 fetches link identity and fetch_from fields together.
+                    return frappe._dict({field: name if field == "name" else None for field in fieldname})
 
             if isinstance(name, Hashable):
                 value = values.get((doctype, name))
@@ -408,8 +416,12 @@ class TestURYItemProductionConfiguration(FrappeTestCase):
             fieldname = kwargs.get("fieldname", args[1] if len(args) > 1 else "name")
             cache = kwargs.get("cache", args[6] if len(args) > 6 else False)
 
-            if fieldname == "name" and cache and isinstance(name, str):
-                return name
+            if cache and isinstance(name, str):
+                if fieldname == "name":
+                    return name
+                if isinstance(fieldname, (tuple, list)) and fieldname[0] == "name":
+                    # Frappe 16 fetches link identity and fetch_from fields together.
+                    return frappe._dict({field: name if field == "name" else None for field in fieldname})
 
             if isinstance(name, Hashable):
                 key = (doctype, name) if isinstance(name, str) else name
@@ -465,8 +477,12 @@ class TestURYItemProductionConfiguration(FrappeTestCase):
             fieldname = kwargs.get("fieldname", args[1] if len(args) > 1 else "name")
             cache = kwargs.get("cache", args[6] if len(args) > 6 else False)
 
-            if fieldname == "name" and cache and isinstance(name, str):
-                return name
+            if cache and isinstance(name, str):
+                if fieldname == "name":
+                    return name
+                if isinstance(fieldname, (tuple, list)) and fieldname[0] == "name":
+                    # Frappe 16 fetches link identity and fetch_from fields together.
+                    return frappe._dict({field: name if field == "name" else None for field in fieldname})
 
             # Handle the IPC lookup for component
             if isinstance(name, dict) and doctype == "URY Item Production Configuration":

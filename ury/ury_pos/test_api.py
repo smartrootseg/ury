@@ -377,23 +377,24 @@ class TestUryPosApi(unittest.TestCase):
             create_customer("Test Invalid Customer", "12345")
         self.assertIn("Invalid mobile number", str(cm.exception))
 
-    @patch("ury.ury_pos.api.frappe.db.get_value")
-    def test_create_customer_validates_against_pos_profile_country(self, mock_get_value):
+    def test_create_customer_validates_against_pos_profile_country(self):
         frappe.set_user("Administrator")
-        # Simulate pos_profile with country "India"
-        mock_get_value.return_value = "India"
+        real_get_value = frappe.db.get_value
 
-        # Valid 10-digit India number
-        result = create_customer("Test India Customer", "9876543210", pos_profile="India POS")
-        self.assertEqual(result.get("status"), "success")
-        if frappe.db.exists("Customer", "Test India Customer"):
-            frappe.delete_doc("Customer", "Test India Customer", ignore_permissions=True, force=1)
+        def get_value(doctype, filters=None, fieldname=None, *args, **kwargs):
+            if (doctype, filters, fieldname) == ("POS Profile", "India POS", "country"):
+                return "India"
+            return real_get_value(doctype, filters, fieldname, *args, **kwargs)
 
-        # Invalid number for India (e.g. 5-digit)
-        with self.assertRaises(frappe.ValidationError) as cm:
-            create_customer("Test India Invalid", "12345", pos_profile="India POS")
-        self.assertIn("Invalid mobile number", str(cm.exception))
-        self.assertIn("India", str(cm.exception))
+        with patch("ury.ury_pos.api.frappe.db.get_value", side_effect=get_value):
+            result = create_customer("Test India Customer", "9876543210", pos_profile="India POS")
+            self.assertEqual(result.get("status"), "success")
+            frappe.delete_doc("Customer", result["name"], ignore_permissions=True, force=1)
+
+            with self.assertRaises(frappe.ValidationError) as cm:
+                create_customer("Test India Invalid", "12345", pos_profile="India POS")
+            self.assertIn("Invalid mobile number", str(cm.exception))
+            self.assertIn("India", str(cm.exception))
 
 
 
@@ -1616,8 +1617,8 @@ class TestPhaseHierarchyHooks(FrappeTestCase):
 
 	# -- Closing hook ------------------------------------------------------
 
-	@patch("ury.ury.hooks.pos_closing.frappe.get_doc")
-	@patch("ury.ury.hooks.pos_closing._phase_dependent_rows")
+	@patch("ury.ury.hooks.ury_pos_closing_entry.frappe.get_doc")
+	@patch("ury.ury.hooks.ury_pos_closing_entry._phase_dependent_rows")
 	@patch("ury.ury_pos.api.frappe.get_all")
 	def test_closing_blocked_until_cashier_and_rm_submitted(
 		self, mock_get_all, mock_rows, mock_get_doc
@@ -1625,7 +1626,7 @@ class TestPhaseHierarchyHooks(FrappeTestCase):
 		"""Order Taker submitted is no longer enough: the Cashier AND the
 		RM closing steps must be submitted before the POS Closing Entry
 		validates."""
-		from ury.ury.hooks.pos_closing import validate_daily_checklists
+		from ury.ury.hooks.ury_pos_closing_entry import validate_daily_checklists
 
 		mock_get_doc.return_value = frappe._dict(branch="Branch A")
 		mock_rows.return_value = self.CLOSING_ROWS
@@ -1638,13 +1639,13 @@ class TestPhaseHierarchyHooks(FrappeTestCase):
 		self.assertIn("Cashier Closing Checklist", str(cm.exception))
 		self.assertIn("RM Closing Checklist", str(cm.exception))
 
-	@patch("ury.ury.hooks.pos_closing.frappe.get_doc")
-	@patch("ury.ury.hooks.pos_closing._phase_dependent_rows")
+	@patch("ury.ury.hooks.ury_pos_closing_entry.frappe.get_doc")
+	@patch("ury.ury.hooks.ury_pos_closing_entry._phase_dependent_rows")
 	@patch("ury.ury_pos.api.frappe.get_all")
 	def test_closing_blocked_until_rm_submitted(
 		self, mock_get_all, mock_rows, mock_get_doc
 	):
-		from ury.ury.hooks.pos_closing import validate_daily_checklists
+		from ury.ury.hooks.ury_pos_closing_entry import validate_daily_checklists
 
 		mock_get_doc.return_value = frappe._dict(branch="Branch A")
 		mock_rows.return_value = self.CLOSING_ROWS
@@ -1656,8 +1657,8 @@ class TestPhaseHierarchyHooks(FrappeTestCase):
 			validate_daily_checklists(doc, None)
 		self.assertIn("RM Closing Checklist", str(cm.exception))
 
-	@patch("ury.ury.hooks.pos_closing.frappe.get_doc")
-	@patch("ury.ury.hooks.pos_closing._phase_dependent_rows")
+	@patch("ury.ury.hooks.ury_pos_closing_entry.frappe.get_doc")
+	@patch("ury.ury.hooks.ury_pos_closing_entry._phase_dependent_rows")
 	@patch("ury.ury_pos.api.frappe.get_all")
 	def test_closing_passes_when_full_hierarchy_submitted(
 		self, mock_get_all, mock_rows, mock_get_doc
@@ -1665,7 +1666,7 @@ class TestPhaseHierarchyHooks(FrappeTestCase):
 		"""OT + Cashier + RM submitted -> the shift can close. Submitted
 		goals are recorded on the document; unranked roles stay outside
 		the sequence."""
-		from ury.ury.hooks.pos_closing import validate_daily_checklists
+		from ury.ury.hooks.ury_pos_closing_entry import validate_daily_checklists
 
 		mock_get_doc.return_value = frappe._dict(branch="Branch A")
 		mock_rows.return_value = self.CLOSING_ROWS

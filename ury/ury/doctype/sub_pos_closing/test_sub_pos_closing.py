@@ -50,7 +50,8 @@ class TestSubPOSClosingSEC09(FrappeTestCase):
     @patch("ury.ury.doctype.sub_pos_closing.sub_pos_closing.frappe.db.get_value")
     @patch("ury.ury.doctype.sub_pos_closing.sub_pos_closing.frappe.get_roles")
     @patch("ury.ury.doctype.sub_pos_closing.sub_pos_closing.frappe.session")
-    def test_invalid_pos_profile(self, mock_session, mock_get_roles, mock_get_value, mock_get_branch):
+    @patch("ury.ury.doctype.sub_pos_closing.sub_pos_closing.frappe.has_permission", return_value=True)
+    def test_invalid_pos_profile(self, mock_has_permission, mock_session, mock_get_roles, mock_get_value, mock_get_branch):
         # 3. Invalid POS Profile
         # Result: DoesNotExistError.
         mock_session.user = "normal_cashier@test.com"

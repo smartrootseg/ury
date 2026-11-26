@@ -10,7 +10,8 @@ vi.mock("../../context/BranchContext", () => ({
   }),
 }));
 
-vi.mock("@ury/core", () => ({
+vi.mock("@ury/core", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@ury/core")>(),
   formatCurrency: (amount: number) => `Rs. ${amount.toFixed(2)}`,
 }));
 

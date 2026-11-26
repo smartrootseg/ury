@@ -1,31 +1,9 @@
-"""Wastage capture, approval, and valuation-hook module for one Issue Authorization.
+"""Capture, approve and value wastage against an Issue Authorization.
 
-Depends only on V3-31 (`ury.ury.api.ury_issue_authorization`). This module
-never creates a Stock Entry, mutates a warehouse quantity, or touches
-ERPNext ledger/stock/costing APIs — it only records an audited, explicitly
-approved wastage amount that V3-31's `prior_quantities()` can later read.
-
-Doctype/field contract this module MUST honor (do not change without also
-changing V3-31, which is out of scope for this task):
-
-    ury/ury/api/ury_issue_authorization.py::prior_quantities() builds:
-        filters = {
-            "plan": plan, "department": department, "branch": branch,
-            "company": company, "component_item": component_item,
-            "status": "Authorized",
-        }
-        wasted_qty = _sum_live_if_exists("URY Wastage", dict(filters), "wasted_qty")
-
-    So V3-31 only counts a "URY Wastage" row toward `wasted_qty` when
-    that row's `status` field is literally the string "Authorized" and it
-    carries matching plan/department/branch/company/component_item fields
-    plus a `wasted_qty` field. Everything else (issue_authorization link,
-    reason, valuation, audit log, capture/approval actor fields) is free.
-
-No hidden/automatic adjustment: a wastage row is created with status
-"Draft" and does NOT reduce entitlement (V3-31 only sums status="Authorized"
-rows). It only starts counting once `approve_wastage()` is explicitly
-called by a distinct authorized role and flips status to "Authorized".
+Quantities live in Wastage Item child rows. Both held quantities and sales-plan
+entitlement use the shared submitted/authorized-item aggregation. Draft,
+rejected and cancelled wastage never reduces either balance. Approval submits
+the document, whose controller handles the corresponding stock posting.
 """
 
 import json
@@ -34,6 +12,7 @@ import frappe
 from frappe import _
 
 from ury.ury.api.ury_issue_authorization import ISSUE_AUTH_DOCTYPE
+from ury.ury.api.ury_wastage_quantities import sum_authorized_wastage
 
 
 WASTAGE_DOCTYPE = "URY Wastage"
@@ -214,10 +193,8 @@ def held_quantity(auth_doc, exclude_wastage=None):
     live-aggregation pattern); Draft/Rejected wastage never reduces this.
     """
     authorized_qty = auth_doc.get("authorized_qty") or 0
-    already_wasted = _sum_authorized(
-        WASTAGE_DOCTYPE,
-        {"issue_authorization": auth_doc.get("name"), "status": "Authorized"},
-        "wasted_qty",
+    already_wasted = sum_authorized_wastage(
+        {"issue_authorization": auth_doc.get("name"), "component_item": auth_doc.get("component_item")},
         exclude_name=exclude_wastage,
     )
     already_returned = _sum_live_if_exists(
@@ -228,42 +205,11 @@ def held_quantity(auth_doc, exclude_wastage=None):
     return max(authorized_qty - already_wasted - already_returned, 0)
 
 
-def _sum_authorized(doctype, filters, fieldname, exclude_name=None):
-    rows = frappe.get_all(doctype, filters=filters, fields=["name", fieldname])
-    total = 0
-    for row in rows:
-        name = row.get("name") if isinstance(row, dict) else row["name"]
-        if exclude_name and name == exclude_name:
-            continue
-        value = row.get(fieldname) if isinstance(row, dict) else row[fieldname]
-        total += value or 0
-    return total
-
-
 def _sum_live_if_exists(doctype, filters, fieldname):
     if not frappe.db.exists("DocType", doctype):
         return 0
-    # URY Wastage stores items in child table now
     if doctype == WASTAGE_DOCTYPE and fieldname == "wasted_qty":
-        query_filters = {k: v for k, v in filters.items() if k != "component_item"}
-        component_item = filters.get("component_item")
-        
-        conditions = []
-        for k, v in query_filters.items():
-            conditions.append(f"w.`{k}` = %({k})s")
-        if component_item:
-            conditions.append("i.`item_code` = %(component_item)s")
-            query_filters["component_item"] = component_item
-            
-        where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-        query = f"""
-            SELECT SUM(i.qty)
-            FROM `tab{WASTAGE_DOCTYPE}` w
-            JOIN `tabWastage Item` i ON w.name = i.parent
-            {where_clause}
-        """
-        res = frappe.db.sql(query, query_filters)
-        return res[0][0] or 0
+        return sum_authorized_wastage(filters)
 
     rows = frappe.get_all(doctype, filters=filters, pluck=fieldname)
     return sum(row or 0 for row in rows)

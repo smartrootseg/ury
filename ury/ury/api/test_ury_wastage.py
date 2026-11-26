@@ -43,6 +43,7 @@ def _new_doc_recorder():
         arg = args[0] if args else kwargs.get("arg1")
         if isinstance(arg, dict):
             doc = frappe._dict(arg)
+            doc["items"] = [frappe._dict(item) for item in arg.get("items", [])]
             doc.insert = MagicMock()
             doc.save = MagicMock()
             created["doc"] = doc
@@ -62,6 +63,9 @@ class TestCaptureWastage(FrappeTestCase):
         now_patcher = patch(f"{MODULE}.frappe.utils.now", return_value="2024-01-01 00:00:00")
         now_patcher.start()
         self.addCleanup(now_patcher.stop)
+        quantity_patcher = patch(f"{MODULE}.sum_authorized_wastage", return_value=0)
+        quantity_patcher.start()
+        self.addCleanup(quantity_patcher.stop)
 
     def test_capture_succeeds_within_held_qty(self):
         auth_doc = _auth_doc()
@@ -90,10 +94,12 @@ class TestCaptureWastage(FrappeTestCase):
             )
 
         self.assertEqual(result.status, "Draft")
-        self.assertEqual(result.wasted_qty, 3)
-        self.assertEqual(result.held_qty_before, 10)
+        self.assertEqual(result.get("items")[0].qty, 3)
+        self.assertEqual(result.get("items")[0].item_code, "COMP-1")
         audit = json.loads(result.audit_log)
         self.assertEqual(audit[0]["event"], "captured")
+        self.assertEqual(audit[0]["held_qty_before"], 10)
+        self.assertEqual(audit[0]["wasted_qty"], 3)
         result.insert.assert_called_once()
 
     def test_capture_rejected_when_exceeding_held_qty(self):
@@ -104,8 +110,7 @@ class TestCaptureWastage(FrappeTestCase):
         ), patch(f"{MODULE}.frappe.get_doc", return_value=auth_doc), patch(
             f"{MODULE}.frappe.db.get_value", return_value="Company A"
         ), patch(
-            f"{MODULE}.frappe.get_all",
-            return_value=[{"name": "W-1", "wasted_qty": 8}],
+            f"{MODULE}.sum_authorized_wastage", return_value=8,
         ), patch(
             f"{MODULE}.frappe.db.exists", return_value=False
         ):
@@ -226,6 +231,9 @@ class TestApproveWastage(FrappeTestCase):
         now_patcher = patch(f"{MODULE}.frappe.utils.now", return_value="2024-01-01 00:00:00")
         now_patcher.start()
         self.addCleanup(now_patcher.stop)
+        quantity_patcher = patch(f"{MODULE}.sum_authorized_wastage", return_value=0)
+        quantity_patcher.start()
+        self.addCleanup(quantity_patcher.stop)
 
     def _draft_doc(self, **values):
         doc = frappe._dict(
@@ -239,25 +247,25 @@ class TestApproveWastage(FrappeTestCase):
                 "component_item": "COMP-1",
                 "status": "Draft",
                 "wasted_qty": 3,
+                "items": [frappe._dict(item_code="COMP-1", qty=3, rate=0)],
                 "audit_log": None,
             }
         )
         doc.update(values)
         doc.save = MagicMock()
+        doc.submit = MagicMock()
         return doc
 
-    def test_draft_wastage_does_not_count_until_approved(self):
-        # held_quantity only sums status="Authorized" wastage rows; a Draft
-        # row (status != Authorized) must not appear in what get_all returns
-        # for that filter, so it never reduces held qty / entitlement.
+    def test_held_quantity_scopes_wastage_to_authorization_and_component(self):
         auth_doc = _auth_doc()
-        with patch(f"{MODULE}.frappe.get_all", return_value=[]) as mocked_get_all, patch(
+        with patch(f"{MODULE}.sum_authorized_wastage", return_value=0) as sum_wastage, patch(
             f"{MODULE}.frappe.db.exists", return_value=False
         ):
             result = held_quantity(auth_doc)
         self.assertEqual(result, 10)
-        called_filters = mocked_get_all.call_args.kwargs.get("filters") or mocked_get_all.call_args[0][1]
-        self.assertEqual(called_filters.get("status"), "Authorized")
+        sum_wastage.assert_called_once_with(
+            {"issue_authorization": "AUTH-1", "component_item": "COMP-1"}, exclude_name=None
+        )
 
     def test_approval_requires_correct_permission(self):
         draft = self._draft_doc()
@@ -286,8 +294,9 @@ class TestApproveWastage(FrappeTestCase):
             result = approve_wastage("W-1", actor="stock-mgr@example.com")
 
         self.assertEqual(result.status, "Authorized")
-        self.assertEqual(result.valuation_amount, 0)
-        result.save.assert_called_once()
+        self.assertEqual(result.get("items")[0].amount, 0)
+        result.submit.assert_called_once()
+        result.save.assert_not_called()
 
     def test_reject_wastage_leaves_status_rejected(self):
         draft = self._draft_doc()
@@ -311,15 +320,14 @@ class TestValuationHook(FrappeTestCase):
         self.addCleanup(now_patcher.stop)
 
     def test_valuation_hook_computes_qty_times_rate(self):
-        doc = frappe._dict({"wasted_qty": 4, "valuation_rate": None})
+        doc = frappe._dict(items=[frappe._dict(item_code="COMP-1", qty=4, rate=None)])
         amount = compute_wastage_valuation(doc, valuation_rate=2.5)
         self.assertEqual(amount, 10.0)
-        self.assertEqual(doc.valuation_rate, 2.5)
-        self.assertEqual(doc.valuation_amount, 10.0)
-        self.assertEqual(doc.valuation_is_estimated, 1)
+        self.assertEqual(doc.get("items")[0].rate, 2.5)
+        self.assertEqual(doc.get("items")[0].amount, 10.0)
 
     def test_valuation_hook_uses_rate_already_on_doc_when_not_passed(self):
-        doc = frappe._dict({"wasted_qty": 2, "valuation_rate": 5})
+        doc = frappe._dict(items=[frappe._dict(item_code="COMP-1", qty=2, rate=5)])
         amount = compute_wastage_valuation(doc)
         self.assertEqual(amount, 10)
 
@@ -350,13 +358,16 @@ class TestListWastage(FrappeTestCase):
             }
         ]
         with patch(f"{MODULE}.frappe.has_permission", return_value=True), patch(
-            f"{MODULE}.frappe.get_all", return_value=rows
-        ) as mocked_get_all:
+            f"{MODULE}.frappe.db.sql", return_value=rows
+        ) as mocked_sql:
             result = list_wastage(branch="Branch A")
 
         self.assertEqual(result, rows)
-        called_filters = mocked_get_all.call_args.kwargs.get("filters")
-        self.assertEqual(called_filters, {"branch": "Branch A"})
+        query, values = mocked_sql.call_args.args
+        self.assertIn("LEFT JOIN `tabWastage Item`", query)
+        self.assertIn("w.`branch` = %(branch)s", query)
+        self.assertEqual(values, {"branch": "Branch A"})
+        self.assertTrue(mocked_sql.call_args.kwargs["as_dict"])
 
     def test_list_fails_closed_when_branch_missing(self):
         with self.assertRaises(frappe.ValidationError):
@@ -364,8 +375,8 @@ class TestListWastage(FrappeTestCase):
 
     def test_list_narrowed_by_department_and_date_filters(self):
         with patch(f"{MODULE}.frappe.has_permission", return_value=True), patch(
-            f"{MODULE}.frappe.get_all", return_value=[]
-        ) as mocked_get_all:
+            f"{MODULE}.frappe.db.sql", return_value=[]
+        ) as mocked_sql:
             list_wastage(
                 branch="Branch A",
                 department="DEPT-1",
@@ -373,8 +384,60 @@ class TestListWastage(FrappeTestCase):
                 to_date="2026-01-31",
             )
 
-        called_filters = mocked_get_all.call_args.kwargs.get("filters")
-        self.assertEqual(called_filters.get("department"), "DEPT-1")
-        self.assertEqual(
-            called_filters.get("creation"), ["between", ["2026-01-01", "2026-01-31"]]
-        )
+        query, values = mocked_sql.call_args.args
+        self.assertIn("w.creation BETWEEN %(from_date)s AND %(to_date)s", query)
+        self.assertIn("w.`department` = %(department)s", query)
+        self.assertEqual(values, {"branch": "Branch A", "department": "DEPT-1",
+                                  "from_date": "2026-01-01", "to_date": "2026-01-31 23:59:59.999999"})
+
+
+class TestAuthorizedWastageQuantities(FrappeTestCase):
+    """Real database coverage for the child-item aggregation contract.
+
+    Insert fixture rows directly: this tests the read query, independently of
+    warehouse posting, approval permissions and unrelated link fixtures.
+    """
+
+    def _scope(self):
+        return {"plan": frappe.generate_hash(length=20), "department": "Quantity Test Dept",
+                "branch": "Quantity Test Branch", "company": "Quantity Test Company",
+                "component_item": "COMP-1"}
+
+    def _seed(self, scope, qty, status="Authorized", docstatus=1, item_code="COMP-1"):
+        name = frappe.generate_hash(length=20)
+        frappe.get_doc({"doctype": "URY Wastage", "name": name,
+            **{key: value for key, value in scope.items() if key != "component_item"},
+            "issue_authorization": scope["plan"], "status": status, "docstatus": docstatus,
+        }).db_insert()
+        frappe.get_doc({"doctype": "Wastage Item", "name": frappe.generate_hash(length=20),
+            "parent": name, "parenttype": "URY Wastage", "parentfield": "items", "idx": 1,
+            "docstatus": docstatus, "item_code": item_code, "qty": qty,
+        }).db_insert()
+        return name
+
+    def test_only_submitted_authorized_component_rows_reduce_entitlement(self):
+        from ury.ury.api.ury_issue_authorization import prior_quantities
+        from ury.ury.api.ury_wastage_quantities import sum_authorized_wastage
+
+        scope = self._scope()
+        self._seed(scope, 3)
+        self._seed(scope, 100, status="Draft", docstatus=0)
+        self._seed(scope, 100, status="Rejected", docstatus=0)
+        self._seed(scope, 100, docstatus=2)
+        self._seed(scope, 100, item_code="COMP-2")
+        other_scope = {**scope, "branch": "Another Branch"}
+        self._seed(other_scope, 100)
+
+        self.assertEqual(sum_authorized_wastage(scope), 3)
+        self.assertEqual(prior_quantities(**scope)["wasted_qty"], 3)
+
+    def test_held_quantity_excludes_the_document_being_approved(self):
+        from ury.ury.api.ury_wastage_quantities import sum_authorized_wastage
+
+        scope = self._scope()
+        first = self._seed(scope, 3)
+        self._seed(scope, 2)
+        self.assertEqual(sum_authorized_wastage(scope, exclude_name=first), 2)
+        auth = frappe._dict(name=scope["plan"], authorized_qty=10, component_item="COMP-1")
+        self.assertEqual(held_quantity(auth), 5)
+        self.assertEqual(held_quantity(auth, exclude_wastage=first), 8)

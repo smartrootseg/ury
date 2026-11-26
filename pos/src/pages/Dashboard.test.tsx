@@ -1,13 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-vi.mock("../i18n", () => ({
-  t: (key) => key,
-  tData: (s) => s,
-  tUser: (s) => s ?? '',
-  tNotification: (s) => s,
-  ltrFraction: (a, b) => `${a} / ${b}`,
-}));
 
 vi.mock("@ury/ui", () => ({
   Card: ({ children, padding }) => <div>{children}</div>,

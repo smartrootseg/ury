@@ -83,7 +83,7 @@ class TestResolveProductionContext(FrappeTestCase):
 
 	@patch(
 		"ury.ury.api.ury_production_context.frappe.db.get_value",
-		side_effect=["Dept Warehouse - URY", "Test Company"],
+		side_effect=[None, "Dept Warehouse - URY", 1, "Test Company"],
 	)
 	def test_bundle_returns_product_bundle_field(self, mock_get_value):
 		row = dict(self.rows[0], production_policy="BUNDLE", product_bundle="BUNDLE-001", production_unit=None)
